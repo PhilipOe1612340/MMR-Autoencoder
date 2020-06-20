@@ -1,5 +1,6 @@
 # MMR-Autoencoder Assignment
 
+[Project Setup](./setup.md)
 
 ## Description
 Using *Pytorch* and the *CIFAR10* dataset, we train an autoencoder network. 
