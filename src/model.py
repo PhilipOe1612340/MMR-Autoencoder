@@ -2,22 +2,24 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# from https://pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html#define-a-convolutional-neural-network
+# from https://medium.com/@vaibhaw.vipul/building-autoencoder-in-pytorch-34052d1d280c
+
+
 class AE(nn.Module):
     def __init__(self):
         super(AE, self).__init__()
-        self.conv1 = nn.Conv2d(3, 6, 5)
-        self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(6, 16, 5)
-        self.fc1 = nn.Linear(16 * 5 * 5, 120)
-        self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, 10)
+        self.encoder = nn.Sequential(nn.Conv2d(3, 6, kernel_size=5), nn.ReLU(
+            True), nn.Conv2d(6, 16, kernel_size=5), nn.ReLU(True))
+        self.decoder = nn.Sequential(nn.ConvTranspose2d(16, 6, kernel_size=5), nn.ReLU(
+            True), nn.ConvTranspose2d(6, 3, kernel_size=5), nn.ReLU(True))
+        self.getLatent = False
 
     def forward(self, x):
-        x = self.pool(F.relu(self.conv1(x)))
-        x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(-1, 16 * 5 * 5)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
+        x = self.encoder(x)
+        if self.getLatent:
+            return x
+        x = self.decoder(x)
         return x
+    
+    def getLatentSpace(self, bool):
+        self.getLatent = bool
