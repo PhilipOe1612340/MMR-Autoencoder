@@ -29,12 +29,12 @@ def findNClosest(img, imgSet, n=5):
 
 
 
-# Testing with 10000 random vectors
-dim = 4
-exampleImg = np.round(np.random.rand(1, dim) * 100)
-exampleDataSet = np.round(np.random.rand(10000, dim) * 100)
-res = findNClosest(exampleImg, exampleDataSet, 5)
-np.set_printoptions(suppress=True)
-print(" x,      y,     z,       distance,      orig. index")
-print(res)
-print(exampleImg)
+# # Testing with 10000 random vectors
+# dim = 4
+# exampleImg = np.round(np.random.rand(1, dim) * 100)
+# exampleDataSet = np.round(np.random.rand(10000, dim) * 100)
+# res = findNClosest(exampleImg, exampleDataSet, 5)
+# np.set_printoptions(suppress=True)
+# print(" x,      y,     z,       distance,      orig. index")
+# print(res)
+# print(exampleImg)
