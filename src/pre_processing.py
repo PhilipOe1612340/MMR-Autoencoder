@@ -65,7 +65,7 @@ def warpTransform(image, mat):
     Equation taken from OpenCV cv::warpPerspective.
     https://docs.opencv.org/master/da/d54/group__imgproc__transform.html#gaf73673a7e8e18ec6963e3774e6a94b87
     """
-    out = np.zeros(image.shape)
+    out = np.zeros(image.shape) # background as black (0, 0, 0)
     chs, rows, cols = image.shape
     for ch in range(chs):
         for i in range(rows):
@@ -74,16 +74,131 @@ def warpTransform(image, mat):
                         (mat[2][0] * i + mat[2][1] * j + mat[2][2])
                 src_j = (mat[1][0] * i + mat[1][1] * j + mat[1][2]) / \
                         (mat[2][0] * i + mat[2][1] * j + mat[2][2])
-                #TODO: Interpolation of coordinates
-                src_i, src_j = int(src_i), int(src_j)
-                out[ch][i][j] = image[ch][src_i][src_j]
+                # without interpolation
+                # src_i, src_j = int(src_i), int(src_j)
+                # out[ch][i][j] = image[ch][src_i][src_j]
+
+                # bilinear interpolation, taking j (the column index) as x, and i (the row index) as y.
+                out[ch][i][j] = computeInterp(image[ch], src_j, src_i)
     return out
 
-def random_projective_transform(image):
+def computeInterp(im, x, y):
+    """
+    compute value on a unexisted float coordinates based on surrounding pixels via bilinear interpolation
+    based on https://stackoverflow.com/questions/12729228/simple-efficient-bilinear-interpolation-of-images-in-numpy-and-python
+
+    Args:
+        image (ndarray(row, cal)): single channel image
+        x (float): x-axis is actually the column index
+        y (float): y-axis is the row index
+    """
+    x = np.asarray(x)
+    y = np.asarray(y)
+
+    x0 = np.floor(x).astype(int)
+    x1 = x0 + 1
+    y0 = np.floor(y).astype(int)
+    y1 = y0 + 1
+
+    x0 = np.clip(x0, 0, im.shape[1]-1)
+    x1 = np.clip(x1, 0, im.shape[1]-1)
+    y0 = np.clip(y0, 0, im.shape[0]-1)
+    y1 = np.clip(y1, 0, im.shape[0]-1)
+
+    Ia = im[ y0, x0 ]
+    Ib = im[ y1, x0 ]
+    Ic = im[ y0, x1 ]
+    Id = im[ y1, x1 ]
+
+    wa = (x1-x) * (y1-y)
+    wb = (x1-x) * (y-y0)
+    wc = (x-x0) * (y1-y)
+    wd = (x-x0) * (y-y0)
+
+    return wa*Ia + wb*Ib + wc*Ic + wd*Id
+
+
+def random_projective_transform(image, dst=None, mirror=False, random_range=0.5):
+    """
+    Perform random projective transform on image
+
+    Args:
+        image (ndarray(ch, row, col))
+        dst ((ndarray(4, 2)), optional):
+            The destination of points as [[upper left], [upper right], [bottom left], [bottom right]].
+            If it is not given as None, a random dst will be computed.
+        mirror (boolean, optional)
+            allows mirror transformation, which increase the level of distortion
+        random_range (float, optional)
+            expanded range for random points area, larger range increases the level of distortion.
+    """
     chs, rows, cols = image.shape
-    src = np.float32([[0, 0], [0, 31], [31, 0], [31, 31]])
-    dst = np.float32([[1, 1], [10, 28], [20, 0], [15, 30]])
-    #TODO: Generate random dest coordinates
+    src = np.float32([[0, 0], [0, cols-1], [rows-1, 0], [rows-1, cols-1]])
+    if dst is None:
+        dst = random_dst(rows, cols, mirror, random_range)
+    while exist_linear(dst):
+        dst = random_dst(rows, cols, mirror, random_range)
     mat = getTransformMatrix(src, dst)
     trans_image = warpTransform(image, mat)
     return trans_image
+
+def random_dst(cols, rows, mirror=False, random_range=0.5):
+    """
+    Generate random dst points for transformation.
+    
+    The possible area of each points will be expanded based on the original image size
+    and random_range parameter.
+    
+    For e.g., with random range of 0.25, the dst area (if mirror is False) for upper left
+    point [0, 0] in a image of [100, 100] will be ([-25, -25], [-25, 50], [50, -25], [50, 50]),
+    which transform to ([0, 0], [0, 75], [75, 0], [75, 75]).
+
+    Args:
+        cols (int)
+        rows (int)
+        mirror (boolean, optional)
+            mirror transformation allows four coordinates fall in the area outside of its
+            corresponding area
+        random_range (float)
+            expanded range for random points area
+    """
+    expanded_i = int(rows * (1 + random_range))
+    expanded_j = int(cols * (1 + random_range))
+    
+    if not mirror:
+        # four coordinates will be restricted to their corresponding area
+        range_i = expanded_i / 2
+        range_j = expanded_j / 2
+
+    while True:
+        dst = [[0, 0], [0, expanded_j], [expanded_i, 0], [expanded_i, expanded_j]]
+        for k in range(4):
+            if dst[k][0] == 0:
+                dst[k][0] = dst[k][0] + np.random.randint(range_i)
+            else:
+                dst[k][0] = dst[k][0] - np.random.randint(range_i)
+            if dst[k][1] == 0:
+                dst[k][1] = dst[k][1] + np.random.randint(range_j)
+            else:
+                dst[k][1] = dst[k][1] - np.random.randint(range_j)
+        if not exist_linear(dst):
+            break
+
+    return dst
+
+
+def exist_linear(p):
+    def _exist_linear(p):
+        """
+        Check linear relationship based on area of triangle
+        [ Ax * (By - Cy) + Bx * (Cy - Ay) + Cx * (Ay - By) ] / 2
+        """
+        if p[0][0] * (p[1][1] - p[2][1]) + p[1][0] * (p[2][1] - p[0][1]) + p[2][0] * (p[0][1] - p[1][1]) == 0:
+            return True
+        else:
+            return False
+    
+    if _exist_linear([p[0], p[1], p[2]]) or _exist_linear([p[0], p[2], p[3]]) or _exist_linear([p[1], p[2], p[3]]):
+        return True
+    else:
+        return False
