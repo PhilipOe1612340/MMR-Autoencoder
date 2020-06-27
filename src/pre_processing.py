@@ -65,7 +65,7 @@ def warpTransform(image, mat):
     Equation taken from OpenCV cv::warpPerspective.
     https://docs.opencv.org/master/da/d54/group__imgproc__transform.html#gaf73673a7e8e18ec6963e3774e6a94b87
     """
-    out = np.zeros(image.shape)
+    out = np.zeros(image.shape) # background as black (0, 0, 0)
     chs, rows, cols = image.shape
     for ch in range(chs):
         for i in range(rows):
@@ -74,16 +74,65 @@ def warpTransform(image, mat):
                         (mat[2][0] * i + mat[2][1] * j + mat[2][2])
                 src_j = (mat[1][0] * i + mat[1][1] * j + mat[1][2]) / \
                         (mat[2][0] * i + mat[2][1] * j + mat[2][2])
-                #TODO: Interpolation of coordinates
-                src_i, src_j = int(src_i), int(src_j)
-                out[ch][i][j] = image[ch][src_i][src_j]
+                # without interpolation
+                # src_i, src_j = int(src_i), int(src_j)
+                # out[ch][i][j] = image[ch][src_i][src_j]
+
+                # bilinear interpolation, taking j (the column index) as x, and i (the row index) as y.
+                out[ch][i][j] = computeInterp(image[ch], src_j, src_i)
     return out
 
-def random_projective_transform(image):
+def computeInterp(im, x, y):
+    """
+    compute value on a unexisted float coordinates based on surrounding pixels via bilinear interpolation
+    based on https://stackoverflow.com/questions/12729228/simple-efficient-bilinear-interpolation-of-images-in-numpy-and-python
+
+    Args:
+        image (ndarray(row, cal)): single channel image
+        x (float): x-axis is actually the column index
+        y (float): y-axis is the row index
+    """
+    x = np.asarray(x)
+    y = np.asarray(y)
+
+    x0 = np.floor(x).astype(int)
+    x1 = x0 + 1
+    y0 = np.floor(y).astype(int)
+    y1 = y0 + 1
+
+    x0 = np.clip(x0, 0, im.shape[1]-1)
+    x1 = np.clip(x1, 0, im.shape[1]-1)
+    y0 = np.clip(y0, 0, im.shape[0]-1)
+    y1 = np.clip(y1, 0, im.shape[0]-1)
+
+    Ia = im[ y0, x0 ]
+    Ib = im[ y1, x0 ]
+    Ic = im[ y0, x1 ]
+    Id = im[ y1, x1 ]
+
+    wa = (x1-x) * (y1-y)
+    wb = (x1-x) * (y-y0)
+    wc = (x-x0) * (y1-y)
+    wd = (x-x0) * (y-y0)
+
+    return wa*Ia + wb*Ib + wc*Ic + wd*Id
+
+
+def random_projective_transform(image, dst=None):
+    """
+    Perform random projective transform on image
+
+    Args:
+        image (ndarray(ch, row, col))
+        dst ((ndarray(4, 2)), optional):
+            The destination of points as [[upper left], [upper right], [bottom left], [bottom right]].
+            If it is not given as None, a random dst will be computed.
+    """
     chs, rows, cols = image.shape
-    src = np.float32([[0, 0], [0, 31], [31, 0], [31, 31]])
-    dst = np.float32([[1, 1], [10, 28], [20, 0], [15, 30]])
-    #TODO: Generate random dest coordinates
+    src = np.float32([[0, 0], [0, cols-1], [rows-1, 0], [rows-1, cols-1]])
+    if dst is None:
+        #TODO: Generate random dest coordinates
+        dst = np.float32([[10, 10], [10, 21], [21, 10], [21, 21]])
     mat = getTransformMatrix(src, dst)
     trans_image = warpTransform(image, mat)
     return trans_image
