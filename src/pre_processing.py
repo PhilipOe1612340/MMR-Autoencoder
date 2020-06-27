@@ -118,7 +118,7 @@ def computeInterp(im, x, y):
     return wa*Ia + wb*Ib + wc*Ic + wd*Id
 
 
-def random_projective_transform(image, dst=None):
+def random_projective_transform(image, dst=None, mirror=False, random_range=0.5):
     """
     Perform random projective transform on image
 
@@ -127,12 +127,78 @@ def random_projective_transform(image, dst=None):
         dst ((ndarray(4, 2)), optional):
             The destination of points as [[upper left], [upper right], [bottom left], [bottom right]].
             If it is not given as None, a random dst will be computed.
+        mirror (boolean, optional)
+            allows mirror transformation, which increase the level of distortion
+        random_range (float, optional)
+            expanded range for random points area, larger range increases the level of distortion.
     """
     chs, rows, cols = image.shape
     src = np.float32([[0, 0], [0, cols-1], [rows-1, 0], [rows-1, cols-1]])
     if dst is None:
-        #TODO: Generate random dest coordinates
-        dst = np.float32([[10, 10], [10, 21], [21, 10], [21, 21]])
+        dst = random_dst(rows, cols, mirror, random_range)
+    while exist_linear(dst):
+        dst = random_dst(rows, cols, mirror, random_range)
     mat = getTransformMatrix(src, dst)
     trans_image = warpTransform(image, mat)
     return trans_image
+
+def random_dst(cols, rows, mirror=False, random_range=0.5):
+    """
+    Generate random dst points for transformation.
+    
+    The possible area of each points will be expanded based on the original image size
+    and random_range parameter.
+    
+    For e.g., with random range of 0.25, the dst area (if mirror is False) for upper left
+    point [0, 0] in a image of [100, 100] will be ([-25, -25], [-25, 50], [50, -25], [50, 50]),
+    which transform to ([0, 0], [0, 75], [75, 0], [75, 75]).
+
+    Args:
+        cols (int)
+        rows (int)
+        mirror (boolean, optional)
+            mirror transformation allows four coordinates fall in the area outside of its
+            corresponding area
+        random_range (float)
+            expanded range for random points area
+    """
+    expanded_i = int(rows * (1 + random_range))
+    expanded_j = int(cols * (1 + random_range))
+    
+    if not mirror:
+        # four coordinates will be restricted to their corresponding area
+        range_i = expanded_i / 2
+        range_j = expanded_j / 2
+
+    while True:
+        dst = [[0, 0], [0, expanded_j], [expanded_i, 0], [expanded_i, expanded_j]]
+        for k in range(4):
+            if dst[k][0] == 0:
+                dst[k][0] = dst[k][0] + np.random.randint(range_i)
+            else:
+                dst[k][0] = dst[k][0] - np.random.randint(range_i)
+            if dst[k][1] == 0:
+                dst[k][1] = dst[k][1] + np.random.randint(range_j)
+            else:
+                dst[k][1] = dst[k][1] - np.random.randint(range_j)
+        if not exist_linear(dst):
+            break
+
+    return dst
+
+
+def exist_linear(p):
+    def _exist_linear(p):
+        """
+        Check linear relationship based on area of triangle
+        [ Ax * (By - Cy) + Bx * (Cy - Ay) + Cx * (Ay - By) ] / 2
+        """
+        if p[0][0] * (p[1][1] - p[2][1]) + p[1][0] * (p[2][1] - p[0][1]) + p[2][0] * (p[0][1] - p[1][1]) == 0:
+            return True
+        else:
+            return False
+    
+    if _exist_linear([p[0], p[1], p[2]]) or _exist_linear([p[0], p[2], p[3]]) or _exist_linear([p[1], p[2], p[3]]):
+        return True
+    else:
+        return False
