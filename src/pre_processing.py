@@ -169,6 +169,9 @@ def random_dst(cols, rows, mirror=False, random_range=0.5):
         # four coordinates will be restricted to their corresponding area
         range_i = expanded_i / 2
         range_j = expanded_j / 2
+    else:
+        range_i = expanded_i
+        range_j = expanded_j
 
     while True:
         dst = [[0, 0], [0, expanded_j], [expanded_i, 0], [expanded_i, expanded_j]]
