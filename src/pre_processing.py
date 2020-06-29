@@ -1,4 +1,7 @@
 import numpy as np
+import itertools
+
+##TODO: Safe check for images format
 
 def add_gaussian_noise(image, mean=0, var=0.01, clip=True):
     """
@@ -61,6 +64,15 @@ def getTransformMatrix(src, dst):
 
     return com
 
+def mp_interp(src, out, mat, cor):
+    [ch, i, j] = cor
+    src_i = (mat[0][0] * i + mat[0][1] * j + mat[0][2]) / \
+            (mat[2][0] * i + mat[2][1] * j + mat[2][2])
+    src_j = (mat[1][0] * i + mat[1][1] * j + mat[1][2]) / \
+            (mat[2][0] * i + mat[2][1] * j + mat[2][2])
+    val = computeInterp(src[ch], src_j, src_i)
+    return val
+
 def warpTransform(image, mat):
     """
     Equation taken from OpenCV cv::warpPerspective.
@@ -68,19 +80,38 @@ def warpTransform(image, mat):
     """
     out = np.zeros(image.shape) # background as black (0, 0, 0)
     chs, rows, cols = image.shape
+    
+    # for ch in range(chs):
+    #     for i in range(rows):
+    #         for j in range(cols):
+    #             src_i = (mat[0][0] * i + mat[0][1] * j + mat[0][2]) / \
+    #                     (mat[2][0] * i + mat[2][1] * j + mat[2][2])
+    #             src_j = (mat[1][0] * i + mat[1][1] * j + mat[1][2]) / \
+    #                     (mat[2][0] * i + mat[2][1] * j + mat[2][2])
+    #             # without interpolation
+    #             # src_i, src_j = int(src_i), int(src_j)
+    #             # out[ch][i][j] = image[ch][src_i][src_j]
+
+    #             # bilinear interpolation, taking j (the column index) as x, and i (the row index) as y.
+    #             out[ch][i][j] = computeInterp(image[ch], src_j, src_i)
+
+    # serialize for parallel
+    cors = []
     for ch in range(chs):
         for i in range(rows):
             for j in range(cols):
-                src_i = (mat[0][0] * i + mat[0][1] * j + mat[0][2]) / \
-                        (mat[2][0] * i + mat[2][1] * j + mat[2][2])
-                src_j = (mat[1][0] * i + mat[1][1] * j + mat[1][2]) / \
-                        (mat[2][0] * i + mat[2][1] * j + mat[2][2])
-                # without interpolation
-                # src_i, src_j = int(src_i), int(src_j)
-                # out[ch][i][j] = image[ch][src_i][src_j]
+                cors.append([ch, i, j])
+    
+    # do calculation in parallel
+    func = partial(mp_interp, image, out, mat)
+    with mp.Pool() as pool:
+        vals = pool.map(func, cors)
 
-                # bilinear interpolation, taking j (the column index) as x, and i (the row index) as y.
-                out[ch][i][j] = computeInterp(image[ch], src_j, src_i)
+    # assign value to out
+    for index, cor in enumerate(cors):
+        [ch, i, j] = cor
+        out[ch][i][j] = vals[index]
+
     return out
 
 def computeInterp(im, x, y):
@@ -117,7 +148,6 @@ def computeInterp(im, x, y):
     wd = (x-x0) * (y-y0)
 
     return wa*Ia + wb*Ib + wc*Ic + wd*Id
-
 
 def random_projective_transform(image, dst=None, mirror=False, random_range=0.5):
     """
@@ -192,7 +222,6 @@ def random_dst(cols, rows, mirror=False, random_range=0.5):
         if not exist_linear(dst):
             break
     return dst
-
 
 def exist_linear(p):
     def _exist_linear(p):
