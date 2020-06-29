@@ -1,4 +1,7 @@
 import numpy as np
+import multiprocessing as mp
+import multiprocessing.pool
+from functools import partial
 import itertools
 
 ##TODO: Safe check for images format
@@ -239,8 +242,23 @@ def exist_linear(p):
     else:
         return False
 
-import multiprocessing as mp
-from functools import partial
+
+"""
+Enable non-daemonic process to have children process
+"""
+
+class NoDaemonProcess(mp.Process):
+    # make 'daemon' attribute always return False
+    def _get_daemon(self):
+        return False
+    def _set_daemon(self, value):
+        pass
+    daemon = property(_get_daemon, _set_daemon)
+
+# We sub-class multiprocessing.pool.Pool instead of multiprocessing.Pool
+# because the latter is only a wrapper function, not a proper class.
+class MyPool(mp.pool.Pool):
+    Process = NoDaemonProcess
 
 def batch_random_projective_transform(images, workers=None, dst=None, mirror=False, random_range=0.5):
     """
@@ -256,8 +274,8 @@ def batch_random_projective_transform(images, workers=None, dst=None, mirror=Fal
         trans_images(ndarray(images, channels, rows, cols))
     """
     altered_transform = partial(random_projective_transform, dst=dst, mirror=mirror, random_range=random_range)
-    with mp.Pool(processes=workers) as pool:
-        trans_images = pool.map(altered_transform, images)
+    pool = MyPool(workers)
+    trans_images = pool.map(altered_transform, images)
     return trans_images
 
 def batch_gaussian_noise(images, workers=None, mean=0, var=0.01, clip=True):
