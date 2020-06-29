@@ -134,10 +134,12 @@ def random_projective_transform(image, dst=None, mirror=False, random_range=0.5)
     """
     chs, rows, cols = image.shape
     src = np.float32([[0, 0], [0, cols-1], [rows-1, 0], [rows-1, cols-1]])
+    print(dst)
     if dst is None:
         dst = random_dst(rows, cols, mirror, random_range)
     while exist_linear(dst):
         dst = random_dst(rows, cols, mirror, random_range)
+    print(dst)
     mat = getTransformMatrix(src, dst)
     trans_image = warpTransform(image, mat)
     return trans_image
@@ -186,7 +188,6 @@ def random_dst(cols, rows, mirror=False, random_range=0.5):
                 dst[k][1] = dst[k][1] - np.random.randint(range_j)
         if not exist_linear(dst):
             break
-
     return dst
 
 
@@ -205,3 +206,43 @@ def exist_linear(p):
         return True
     else:
         return False
+
+import multiprocessing as mp
+from functools import partial
+
+def batch_random_projective_transform(images, workers=None, dst=None, mirror=False, random_range=0.5):
+    """
+    Args:
+        images (ndarray(images, channels, rows, cols))
+        workers (int, optional)
+            If not given, will be cpu count.
+        dst (array(4, 2), optional) arg for transform
+        mirror (boolean, optional) arg for transform
+        random_range (float, optional) arg for transform
+
+    Returns:
+        trans_images(ndarray(images, channels, rows, cols))
+    """
+    #TODO: solve random number in parallel
+    altered_transform = partial(random_projective_transform, dst=dst, mirror=mirror, random_range=random_range)
+    with mp.Pool(processes=workers) as pool:
+        trans_images = pool.map(altered_transform, images)
+    return trans_images
+
+def batch_gaussian_noise(images, workers=None, mean=0, var=0.01, clip=True):
+    """
+    Args:
+        images (ndarray(images, channels, rows, cols))
+        workers ([type], optional)
+            If not given, will be cpu count
+        mean (int, optional) arg for transform
+        var (float, optional) arg for transform
+        clip (bool, optional) arg for transform
+
+    Returns:
+        noise_images(ndarray(images, channels, rows, cols))
+    """
+    altered_gaussian = partial(add_gaussian_noise, mean=mean, var=var, clip=clip)
+    with mp.Pool(processes=workers) as pool:
+        noise_images = pool.map(altered_gaussian, images)
+    return noise_images
