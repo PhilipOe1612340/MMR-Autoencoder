@@ -25,6 +25,7 @@ def add_gaussian_noise(image, mean=0, var=0.01, clip=True):
         low_clip = -1.
     else:
         low_clip = 0.
+    np.random.seed()
     noise = np.random.normal(mean, var ** 0.5, image.shape)
     noise_image = image + noise
     if clip:
@@ -134,12 +135,10 @@ def random_projective_transform(image, dst=None, mirror=False, random_range=0.5)
     """
     chs, rows, cols = image.shape
     src = np.float32([[0, 0], [0, cols-1], [rows-1, 0], [rows-1, cols-1]])
-    print(dst)
     if dst is None:
         dst = random_dst(rows, cols, mirror, random_range)
     while exist_linear(dst):
         dst = random_dst(rows, cols, mirror, random_range)
-    print(dst)
     mat = getTransformMatrix(src, dst)
     trans_image = warpTransform(image, mat)
     return trans_image
@@ -179,12 +178,16 @@ def random_dst(cols, rows, mirror=False, random_range=0.5):
         dst = [[0, 0], [0, expanded_j], [expanded_i, 0], [expanded_i, expanded_j]]
         for k in range(4):
             if dst[k][0] == 0:
+                np.random.seed()
                 dst[k][0] = dst[k][0] + np.random.randint(range_i)
             else:
+                np.random.seed()
                 dst[k][0] = dst[k][0] - np.random.randint(range_i)
             if dst[k][1] == 0:
+                np.random.seed()
                 dst[k][1] = dst[k][1] + np.random.randint(range_j)
             else:
+                np.random.seed()
                 dst[k][1] = dst[k][1] - np.random.randint(range_j)
         if not exist_linear(dst):
             break
@@ -223,7 +226,6 @@ def batch_random_projective_transform(images, workers=None, dst=None, mirror=Fal
     Returns:
         trans_images(ndarray(images, channels, rows, cols))
     """
-    #TODO: solve random number in parallel
     altered_transform = partial(random_projective_transform, dst=dst, mirror=mirror, random_range=random_range)
     with mp.Pool(processes=workers) as pool:
         trans_images = pool.map(altered_transform, images)
