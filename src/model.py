@@ -31,19 +31,18 @@ class AE(nn.Module):
             )
 
         self.getLatent = False
-        self.batch = 4
 
     def forward(self, x):
-        self.batch = x.shape[0]
+        batch = x.shape[0]
         x = self.encoder(x)
-        x = x.view(self.batch, -1)
+        x = x.view(batch, -1)
         x = self.latent(x)
 
         if self.getLatent:
             return x
         
         x = self.latent2(x)
-        x = x.view(self.batch, 32 * 20 * 20)
+        x = x.view(batch, 32 * 20 * 20)
         x = x.view(-1, 32, 20, 20)
         x = self.decoder(x)
         return x
