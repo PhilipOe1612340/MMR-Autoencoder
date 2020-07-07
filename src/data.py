@@ -8,7 +8,6 @@ class Loader():
     def __init__(self, **kwargs):
         super().__init__()
         batches = kwargs["batch_size"]
-        # from https://pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html#loading-and-normalizing-cifar10
         print('Wait for both datasets to be downloaded and verified.')
 
         transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
